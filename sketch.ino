@@ -5,7 +5,7 @@
 // Include your custom gauge font
 #include "QuartzRegularDB12pt7b.h"   
 
-// Include standard Adafruit GFX fonts (no extra download needed)
+// Include standard Adafruit GFX fonts
 #include <Fonts/FreeMonoBold9pt7b.h>
 
 #define SCREEN_WIDTH 128
@@ -32,6 +32,7 @@ NTCPoint table[TABLE_SIZE] = {
 };
 
 bool sensorDisconnected = false;
+int lastMappedContrast = -1; // Cache to prevent spamming the OLED over I2C
 
 float readNtcResistance() {
   long sum = 0;
@@ -40,10 +41,13 @@ float readNtcResistance() {
     delay(2);
   }
   float rawAdc = sum / 20.0;
-  if (rawAdc <= 50) { 
+  
+  // Adjusted threshold check for both Short Circuit (<= 50) and Open Circuit (>= 4020)
+  if (rawAdc <= 50 || rawAdc >= 4020) { 
     sensorDisconnected = true;
     return -1.0; 
   } 
+  
   sensorDisconnected = false;
   return SERIES_RESISTOR * ((4095.0 - rawAdc) / rawAdc);
 }
@@ -99,17 +103,16 @@ void setup() {
   display.setRotation(2);
 
   // ==========================================
-  // SPLASH SCREEN
+  // ANIMATED SPLASH SCREEN
   // ==========================================
   display.setTextColor(SSD1306_WHITE);
 
   for (int i = 0; i < 12; i++) {
-
     display.clearDisplay();
 
     // BMW E36 title
     display.setFont(&FreeMonoBold9pt7b);
-    display.setCursor(25, 12);
+    display.setCursor(25, 14); // Adjusted slightly down for proper vertical alignment
     display.print("BMW E36");
 
     // Initializing text
@@ -120,15 +123,9 @@ void setup() {
 
     // Animated dots
     switch (i % 4) {
-      case 1:
-        display.print(".");
-        break;
-      case 2:
-        display.print("..");
-        break;
-      case 3:
-        display.print("...");
-        break;
+      case 1: display.print(".");   break;
+      case 2: display.print("..");  break;
+      case 3: display.print("..."); break;
     }
 
     display.display();
@@ -137,14 +134,27 @@ void setup() {
 }
 
 void loop() {
+  // ==========================================
+  // EFFICIENT HARDWARE DIMMING (Cache Check)
+  // ==========================================
   int potValue = analogRead(POT_PIN);
-  if (potValue < 150) {
-    setOledBrightness(255, false); 
-  } else {
-    int contrastValue = map(potValue, 150, 4095, 140, 1); 
-    setOledBrightness(contrastValue, true); 
+  int targetContrast = 255;
+  bool targetNightMode = false;
+
+  if (potValue >= 150) {
+    targetContrast = map(potValue, 150, 4095, 140, 1); 
+    targetNightMode = true;
   }
 
+  // Only issue commands to the OLED over I2C if the physical dial state altered
+  if (targetContrast != lastMappedContrast) {
+    setOledBrightness(targetContrast, targetNightMode);
+    lastMappedContrast = targetContrast;
+  }
+
+  // ==========================================
+  // SENSOR DATA READINGS
+  // ==========================================
   float voltage = readVoltage();
   float ntcResistance = readNtcResistance();
   float oilTemp = calculateTemperature(ntcResistance);
@@ -172,8 +182,12 @@ void loop() {
   } else {
     display.print(oilTemp, 0); 
   }
-  display.fillCircle(display.getCursorX() + 2, 2, 1, SSD1306_WHITE); 
-  display.setCursor(display.getCursorX() + 6, 16);
+  
+  // Safe layout handling: get position *before* custom rendering updates it implicitly
+  int degreeX = display.getCursorX() + 2; 
+  display.fillCircle(degreeX, 2, 1, SSD1306_WHITE); // Draw degree circle
+  
+  display.setCursor(degreeX + 4, 16); // Advance text cursor safely past the custom drawing width
   display.print("C");
 
   // VERTICAL CENTER SEPARATOR LINE
