@@ -17,8 +17,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 const float SERIES_RESISTOR = 10000.0; // Your 10k resistor to GND
 
 // FINE-TUNING CALIBRATION
-// Adjust this value if your readings are slightly off at operating temperature.
-// Currently set to +4.0 to correct the 52C -> 56C discrepancy.
 const float TEMP_CALIBRATION_OFFSET = 4.0; 
 
 struct NTCPoint {
@@ -33,7 +31,6 @@ NTCPoint table[TABLE_SIZE] = {
   {71, 8500},  {75, 7200},  {83, 5500},  {87, 4700},  {90, 4500}, {92, 4200}
 };
 
-// Flag to store sensor connection state
 bool sensorDisconnected = false;
 
 float readNtcResistance() {
@@ -44,15 +41,12 @@ float readNtcResistance() {
   }
   float rawAdc = sum / 20.0;
   
-  // With your wiring, a disconnected sensor pulls GPIO34 down to 0V (GND) through the 10k resistor.
   if (rawAdc <= 50) { 
     sensorDisconnected = true;
     return -1.0; 
   } 
   
   sensorDisconnected = false;
-  
-  // CORRECTED FORMULA FOR HIGH-SIDE SENSOR / LOW-SIDE RESISTOR
   return SERIES_RESISTOR * ((4095.0 - rawAdc) / rawAdc);
 }
 
@@ -61,7 +55,6 @@ float calculateTemperature(float currentResistance) {
     return 0; 
   }
 
-  // Array boundary protection
   if (currentResistance >= table[0].resistance) return table[0].temp; 
   if (currentResistance <= table[TABLE_SIZE - 1].resistance) return table[TABLE_SIZE - 1].temp;
 
@@ -85,16 +78,23 @@ float readVoltage() {
   }
   float raw = sum / 20.0;
   float adcVoltage = (raw / 4095.0) * 3.3;
-  
-  // FINE-TUNED MULTI-POINT CORRECTION
   float realVoltage = (3.8501 * adcVoltage) + 3.128;
-  
   return realVoltage;
 }
 
-void setOledBrightness(uint8_t value) {
+// ADVANCED DIMMING LOGIC FOR SSD1306
+void setOledBrightness(uint8_t contrast, bool nightMode) {
+  // Set main contrast value
   display.ssd1306_command(SSD1306_SETCONTRAST);
-  display.ssd1306_command(value);
+  display.ssd1306_command(contrast);
+  
+  // Adjust pre-charge period register for genuine nighttime dimming
+  display.ssd1306_command(0xD9); 
+  if (nightMode) {
+    display.ssd1306_command(0x11); // Drops discharge/precharge phases to absolute minimum limits
+  } else {
+    display.ssd1306_command(0xF1); // Factory default crisp high-brightness values
+  }
 }
 
 void setup() {
@@ -111,15 +111,18 @@ void setup() {
 
 void loop() {
   // ==========================================
-  // SMART HEADLIGHT & INVERTED POTENTIOMETER LOGIC
+  // UPDATED HARDWARE DIMMING ADJUSTMENTS
   // ==========================================
   int potValue = analogRead(POT_PIN);
 
-  if (potValue < 200) {
-    setOledBrightness(255); 
+  // Lowered threshold to 150 as requested
+  if (potValue < 150) {
+    setOledBrightness(255, false); // Daytime Max Brightness
   } else {
-    int brightness = map(potValue, 200, 4095, 10, 200); 
-    setOledBrightness(brightness);
+    // Map contrast range down to 1 for significant night reduction
+    // Maps 150 (lightly dim) down to 4095 (maximum knob rotation/deep dim)
+    int contrastValue = map(potValue, 150, 4095, 140, 1); 
+    setOledBrightness(contrastValue, true); // NightMode active triggers low-power emission registers
   }
 
   // ==========================================
@@ -129,7 +132,6 @@ void loop() {
   float ntcResistance = readNtcResistance();
   float oilTemp = calculateTemperature(ntcResistance);
 
-  // APPLY ADC HARDWARE CALIBRATION OFFSET
   if (!sensorDisconnected && oilTemp > 0) {
     oilTemp += TEMP_CALIBRATION_OFFSET;
   }
@@ -140,13 +142,13 @@ void loop() {
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
 
-  // VOLTAGE DISPLAY (CUSTOM FONT)
+  // VOLTAGE DISPLAY
   display.setFont(&QuartzRegularDB12pt7b);
   display.setCursor(0, 16);   
   display.print(voltage, 1);
   display.print("V");
 
-  // OIL TEMPERATURE DISPLAY (CUSTOM FONT)
+  // OIL TEMPERATURE DISPLAY
   display.setCursor(73, 16); 
   
   if (sensorDisconnected || oilTemp == 0) {
@@ -162,7 +164,7 @@ void loop() {
   // VERTICAL CENTER SEPARATOR LINE
   display.drawLine(62, 0, 62, 32, SSD1306_WHITE); 
 
-  // BOTTOM LABELS (DEFAULT FIXED FONT)
+  // BOTTOM LABELS
   display.setFont(NULL);
   display.setTextSize(1);
   
