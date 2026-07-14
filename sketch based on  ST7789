@@ -1,0 +1,220 @@
+#include <SPI.h>
+#include <TFT_eSPI.h> // Hardware SPI library for ST7789
+
+// Include your custom gauge font
+#include "QuartzRegularDB12pt7b.h"   
+
+// Include standard Adafruit GFX fonts
+#include <Fonts/FreeMonoBold9pt7b.h>
+
+// Initialize TFT_eSPI
+TFT_eSPI tft = TFT_eSPI();
+
+// --- HARDWARE PIN ASSIGNMENTS ---
+#define VOLT_PIN       35  // Battery Voltage tracker
+#define POT_PIN        32  // Instrument cluster dimmer circuit
+#define OIL_TEMP_PIN   34  // NTC temperature sensor signal
+#define TFT_BL_PIN     15  // Backlight PWM Pin (Purple Wire)
+
+// --- SENSOR PARAMETERS ---
+const float SERIES_RESISTOR = 10000.0; 
+const float TEMP_CALIBRATION_OFFSET = 4.0; 
+
+struct NTCPoint {
+  float temp;
+  float resistance;
+};
+
+const int TABLE_SIZE = 11;
+NTCPoint table[TABLE_SIZE] = {
+  {22, 56200}, {45, 21600}, {47, 20200}, {53, 16000}, {62, 11400},
+  {71, 8500},  {75, 7200},  {83, 5500},  {87, 4700},  {90, 4500}, {92, 4200}
+};
+
+bool sensorDisconnected = false;
+int lastPwmDuty = -1; // Cache for dimming PWM updates
+
+// ==========================================
+// 24x24 LOW-BEAM HEADLIGHT ICON BITMAP
+// ==========================================
+const unsigned char epd_bitmap_headlight[] PROGMEM = {
+  0x00, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x03, 0xf0, 0xc0, 0x0e, 0x0c, 0x20, 
+  0x38, 0x03, 0x10, 0x60, 0x00, 0x90, 0xc1, 0x00, 0x48, 0x82, 0x00, 0x48, 
+  0x04, 0x00, 0x24, 0x08, 0x00, 0x24, 0x10, 0x00, 0x24, 0x20, 0x00, 0x24, 
+  0x40, 0x00, 0x24, 0x00, 0x00, 0x48, 0x00, 0x00, 0x48, 0x00, 0x00, 0x90, 
+  0x00, 0x03, 0x10, 0x00, 0x0e, 0x20, 0x00, 0x30, 0xc0, 0x00, 0x1f, 0x00, 
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+// ==========================================
+// SENSOR READING FUNCTIONS
+// ==========================================
+float readNtcResistance() {
+  long sum = 0;
+  for (int i = 0; i < 20; i++) {
+    sum += analogRead(OIL_TEMP_PIN);
+    delay(2);
+  }
+  float rawAdc = sum / 20.0;
+  
+  if (rawAdc <= 50 || rawAdc >= 4020) { 
+    sensorDisconnected = true;
+    return -1.0; 
+  } 
+  
+  sensorDisconnected = false;
+  return SERIES_RESISTOR * ((4095.0 - rawAdc) / rawAdc);
+}
+
+float calculateTemperature(float currentResistance) {
+  if (sensorDisconnected || currentResistance <= 0) return 0;
+  if (currentResistance >= table[0].resistance) return table[0].temp; 
+  if (currentResistance <= table[TABLE_SIZE - 1].resistance) return table[TABLE_SIZE - 1].temp;
+
+  for (int i = 0; i < TABLE_SIZE - 1; i++) {
+    if (currentResistance <= table[i].resistance && currentResistance >= table[i + 1].resistance) {
+      float r0 = table[i].resistance;
+      float r1 = table[i + 1].resistance;
+      float t0 = table[i].temp;
+      float t1 = table[i + 1].temp;
+      return t0 + (currentResistance - r0) * ((t1 - t0) / (r1 - r0));
+    }
+  }
+  return 0; 
+}
+
+float readVoltage() {
+  long sum = 0;
+  for (int i = 0; i < 20; i++) {
+    sum += analogRead(VOLT_PIN);
+    delay(2);
+  }
+  float raw = sum / 20.0;
+  float adcVoltage = (raw / 4095.0) * 3.3;
+  
+  return (4.115 * adcVoltage) + 3.128;
+}
+
+// ==========================================
+// SETUP
+// ==========================================
+void setup() {
+  Serial.begin(115200);
+  analogReadResolution(12);
+
+  // Initialize Backlight PWM
+  pinMode(TFT_BL_PIN, OUTPUT);
+  analogWrite(TFT_BL_PIN, 255); // Full brightness startup
+
+  // Initialize ST7789 TFT
+  tft.init();
+  tft.setRotation(1);        // Landscape orientation
+  tft.invertDisplay(true);   // Corrects color inversion on ST7789
+  tft.fillScreen(TFT_BLACK);
+
+  // ==========================================
+  // ANIMATED SPLASH SCREEN
+  // ==========================================
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+
+  for (int i = 0; i < 12; i++) {
+    tft.fillScreen(TFT_BLACK);
+
+    // BMW E36 Title
+    tft.setFreeFont(&FreeMonoBold9pt7b);
+    tft.drawString("BMW E36", 110, 60);
+
+    // Initializing text
+    tft.setTextFont(1); // Standard font
+    tft.setTextSize(2);
+    tft.setCursor(95, 100);
+    tft.print("Initializing");
+
+    // Animated dots
+    switch (i % 4) {
+      case 1: tft.print(".");   break;
+      case 2: tft.print("..");  break;
+      case 3: tft.print("..."); break;
+    }
+
+    delay(180);
+  }
+
+  tft.fillScreen(TFT_BLACK);
+}
+
+// ==========================================
+// MAIN LOOP
+// ==========================================
+void loop() {
+  // ==========================================
+  // PWM BACKLIGHT DIMMING (TFT Replacement for OLED Contrast)
+  // ==========================================
+  int potValue = analogRead(POT_PIN);
+  int targetPwm = 255; // Full brightness during day
+  bool headlightsOn = false;
+
+  if (potValue >= 150) {
+    headlightsOn = true;
+    // Map cluster dimmer signal to PWM range (255 down to ~15 for night)
+    targetPwm = map(potValue, 150, 4095, 200, 15); 
+  }
+
+  if (targetPwm != lastPwmDuty) {
+    analogWrite(TFT_BL_PIN, targetPwm);
+    lastPwmDuty = targetPwm;
+  }
+
+  // ==========================================
+  // SENSOR READINGS
+  // ==========================================
+  float voltage = readVoltage();
+  float ntcResistance = readNtcResistance();
+  float oilTemp = calculateTemperature(ntcResistance);
+
+  if (!sensorDisconnected && oilTemp > 0) {
+    oilTemp += TEMP_CALIBRATION_OFFSET;
+  }
+
+  // ==========================================
+  // TFT RENDERING (Layout placeholder to align later)
+  // ==========================================
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+
+  // VOLTAGE DISPLAY
+  tft.setFreeFont(&QuartzRegularDB12pt7b);
+  tft.setCursor(10, 50);   
+  tft.print(voltage, 1);
+  tft.print("V");
+
+  // TEMPERATURE DISPLAY
+  tft.setCursor(170, 50); 
+  if (sensorDisconnected || oilTemp == 0) {
+    tft.print("---"); 
+  } else {
+    tft.print(oilTemp, 0); 
+  }
+  
+  int degreeX = tft.getCursorX() + 2; 
+  tft.fillCircle(degreeX, 35, 2, TFT_WHITE); // Degree symbol circle
+  
+  tft.setCursor(degreeX + 6, 50); 
+  tft.print("C");
+
+  // CENTER VERTICAL SEPARATOR LINE
+  tft.drawFastVLine(160, 10, 152, TFT_WHITE); 
+
+  // BOTTOM TEXT LABELS
+  tft.setTextFont(1);
+  tft.setTextSize(2);
+  tft.drawString("Battery", 10, 90);
+  tft.drawString("Oil Temp", 170, 90);
+
+  // HEADLIGHT INDICATOR ICON (Appears when cluster lights are on)
+  if (headlightsOn) {
+    tft.drawBitmap(10, 130, epd_bitmap_headlight, 24, 24, TFT_GREEN);
+  }
+
+  delay(100); 
+}
