@@ -5,7 +5,9 @@
 // Include your custom gauge font
 #include "DS_Digital_Bold16pt7b.h"   
 #include "DS_Digital_Bold12pt7b.h" 
+#include "DS_Digital_Bold10pt7b.h" 
 #include "Fonts/FreeSansBold9pt7b.h"
+#include "Nunito_Regular10pt7b.h"
 
 // --- HARDWARE PIN ASSIGNMENTS ---
 #define TFT_CS         5   // Blue Wire
@@ -20,9 +22,11 @@
 #define OIL_TEMP_PIN  34   // NTC temperature sensor signal
 
 // --- COLOR CONFIGURATIONS (BMW OEM Amber/Orange Theme) ---
-#define COLOR_DARK_ORANGE  0x99E0 // Dark orange/amber background for the entire top half
+#define COLOR_DARK_ORANGE  0x1020 // Scaled down exactly 50% dimmer on the same spectrum
 #define COLOR_LIGHT_ORANGE 0xFCE0  // Bright light orange/amber for text
+#define COLOR_LIGHT_ORANGE_SMALL 0xC280  // Bright light orange/amber for text
 #define COLOR_LIGHT_GREEN  0x1D80
+#define COLOR_LIGHT_BLUE   0x053B // Crisp bright blue for temporary HU check
 
 // --- SENSOR PARAMETERS ---
 const float SERIES_RESISTOR = 10000.0; 
@@ -34,8 +38,7 @@ struct NTCPoint {
 };
 
 const int TABLE_SIZE = 11;
-NTCPoint table[TABLE_SIZE] = {
-  {22, 56200}, {45, 21600}, {47, 20200}, {53, 16000}, {62, 11400},
+NTCPoint table[TABLE_SIZE] = { 
   {71, 8500},  {75, 7200},  {83, 5500},  {87, 4700},  {90, 4500}, {92, 4200}
 };
 
@@ -47,6 +50,11 @@ float lastVoltage = -1.0;
 float lastOilTemp = -1.0;
 bool lastHeadlightsState = false;
 bool firstRun = true;
+
+// Temporary HU display state
+unsigned long bootTime = 0;
+bool huVisible = true;
+const unsigned long HU_TIMEOUT = 10000; // 10 seconds
 
 // Initialize SPI & Adafruit Driver
 SPIClass *vspi = new SPIClass(VSPI);
@@ -150,6 +158,7 @@ void setup() {
   }
 
   tft.fillScreen(ST77XX_BLACK);
+  bootTime = millis(); // Lock in startup time reference when main screens load
 }
 
 // ==========================================
@@ -191,20 +200,20 @@ void loop() {
   if (firstRun) {
     tft.fillScreen(ST77XX_BLACK);
     
-    // Draw the solid dark orange canvas across the entire top half (Y: 0 to 85)
-    tft.fillRect(0, 0, 320, 85, COLOR_DARK_ORANGE);
+    // Draw the solid dark orange canvas across the entire top half (Y: 0 to 70)
+    tft.fillRect(0, 0, 320, 70, COLOR_DARK_ORANGE);
     
     // Draw a 2-pixel light orange divider line splitting the left and right orange sections
-    tft.fillRect(159, 0, 2, 85, COLOR_LIGHT_ORANGE);
+    tft.fillRect(162, 0, 3, 70, COLOR_LIGHT_ORANGE);
 
     // Static Labels (printed directly on top of the dark orange background)
     tft.setFont(); // Standard font
     tft.setTextSize(2);
-    tft.setTextColor(COLOR_LIGHT_ORANGE, COLOR_DARK_ORANGE); 
+    tft.setTextColor(COLOR_LIGHT_ORANGE_SMALL); 
     
-    tft.setCursor(25, 62);
+    tft.setCursor(25, 80);
     tft.print("Battery");
-    tft.setCursor(185, 62);
+    tft.setCursor(185, 80);
     tft.print("Oil Temp");
     
     firstRun = false;
@@ -214,14 +223,17 @@ void loop() {
   // DYNAMIC VOLTAGE UPDATE
   // ==========================================
   if (abs(voltage - lastVoltage) >= 0.1) {
-    // Overwrite the old value with dark orange to keep the seamless header look
-    tft.fillRect(5, 5, 150, 48, COLOR_DARK_ORANGE);
+    // Completely clears down to Y: 58 to prevent character stacking artifacts
+    tft.fillRect(5, 2, 150, 56, COLOR_DARK_ORANGE);
 
     tft.setFont(&DS_Digital_Bold16pt7b);
     tft.setTextColor(COLOR_LIGHT_ORANGE); 
-    tft.setCursor(17, 48);   
-    tft.print(voltage, 2);
-    tft.setFont(&DS_Digital_Bold12pt7b);
+    tft.setCursor(20, 55);   
+    
+    // Voltage string print shortened to 1 decimal format
+    tft.print(voltage, 1); 
+    
+    tft.setFont(&FreeSansBold9pt7b);
     tft.print("V");
     
     lastVoltage = voltage;
@@ -231,12 +243,12 @@ void loop() {
   // DYNAMIC TEMPERATURE UPDATE
   // ==========================================
   if (oilTemp != lastOilTemp) {
-    // Overwrite the old value with dark orange to keep the seamless header look
-    tft.fillRect(165, 5, 150, 48, COLOR_DARK_ORANGE);
+    // Completely clears down to Y: 58 to prevent character stacking artifacts
+    tft.fillRect(165, 2, 150, 56, COLOR_DARK_ORANGE);
 
     tft.setFont(&DS_Digital_Bold16pt7b);
     tft.setTextColor(COLOR_LIGHT_ORANGE); 
-    tft.setCursor(185, 48); 
+    tft.setCursor(185, 55); 
     
     if (sensorDisconnected || oilTemp == 0) {
       tft.print("---"); 
@@ -244,28 +256,32 @@ void loop() {
       tft.print(oilTemp, 0); 
     }
     
-    // Dynamic custom degree symbol drawing
+    // Dynamic custom degree symbol drawing (LEFT ALONE)
     int16_t x1, y1;
     uint16_t w, h;
     String tempVal = (sensorDisconnected || oilTemp == 0) ? "---" : String((int)oilTemp);
     tft.getTextBounds(tempVal, 185, 34, &x1, &y1, &w, &h);
     int degreeX = x1 + w + 4; 
     
-    tft.fillCircle(degreeX, 16, 2, COLOR_LIGHT_ORANGE);
+    int rOuter = 6;
+    int rInner = 3;
+
+    tft.fillCircle(degreeX, 16, rOuter, COLOR_LIGHT_ORANGE);
+    tft.fillCircle(degreeX, 16, rInner, COLOR_DARK_ORANGE); 
     
-    tft.setCursor(degreeX + 8, 42);
-    tft.setFont(&DS_Digital_Bold12pt7b); 
+    tft.setCursor(degreeX + 9, 55);
+    tft.setFont(&FreeSansBold9pt7b); 
     tft.print("C");
     
     lastOilTemp = oilTemp;
   }
 
-// ==========================================
+  // ==========================================
   // DYNAMIC HEADLIGHT ICON UPDATE (Font-based "D" + Vector Low Beams)
   // ==========================================
   if (headlightsOn != lastHeadlightsState) {
     int iconX = 40; 
-    int iconY = 145; 
+    int iconY = 135; 
     
     // Determine the color based on headlight state (COLOR_LIGHT_GREEN to show)
     uint16_t activeColor = headlightsOn ? COLOR_LIGHT_GREEN : ST77XX_BLACK;
@@ -278,14 +294,14 @@ void loop() {
 
     // 2. Draw the 3 downward-sloping beam lines
     // Top beam
-    tft.drawLine(iconX - 10, iconY - 8, iconX - 22, iconY - 4, activeColor);
-    tft.drawLine(iconX - 11, iconY - 7, iconX - 23, iconY - 3, activeColor); 
-    tft.drawLine(iconX - 12, iconY - 6, iconX - 24, iconY - 2, activeColor);
+    tft.drawLine(iconX - 6, iconY - 8, iconX - 18, iconY - 4, activeColor);
+    tft.drawLine(iconX - 7, iconY - 7, iconX - 19, iconY - 3, activeColor); 
+    tft.drawLine(iconX - 8, iconY - 6, iconX - 20, iconY - 2, activeColor);
 
     // Middle beam
-    tft.drawLine(iconX - 10, iconY - 0, iconX - 23, iconY + 5, activeColor);
-    tft.drawLine(iconX - 11, iconY + 1, iconX - 24, iconY + 6, activeColor); 
-    tft.drawLine(iconX - 12, iconY + 2, iconX - 25, iconY + 7, activeColor);
+    tft.drawLine(iconX - 8, iconY - 0, iconX - 21, iconY + 5, activeColor);
+    tft.drawLine(iconX - 9, iconY + 1, iconX - 22, iconY + 6, activeColor); 
+    tft.drawLine(iconX - 10, iconY + 2, iconX - 23, iconY + 7, activeColor);
 
     // Bottom beam
     tft.drawLine(iconX - 10, iconY + 9, iconX - 24, iconY + 14, activeColor);
@@ -293,6 +309,34 @@ void loop() {
     tft.drawLine(iconX - 12, iconY + 11, iconX - 26, iconY + 16, activeColor);
 
     lastHeadlightsState = headlightsOn;
+  }
+
+  // ==========================================
+  // TEMPORARY HU EXPIRATION DISPLAY (10-Second Timer)
+  // ==========================================
+  if (huVisible) {
+    int huX = 110; // Placed next to headlight icon (which spans X: 14 to 40)
+    int huY = 135; // Match icon's Y reference level
+
+    if (millis() - bootTime < HU_TIMEOUT) {
+      // Draw the text in crisp Blue (only runs on the first few loops)
+      static bool firstDraw = true;
+      if (firstDraw) {
+        tft.setFont(&DS_Digital_Bold10pt7b);
+        tft.setTextColor(COLOR_LIGHT_BLUE);
+        tft.setCursor(huX, huY + 12); // Matches baseline shift of your 'D' character
+        tft.print("HU 10/27");
+        firstDraw = false;
+      }
+    } else {
+      // Time is up! Draw in Black to erase, then kill this code execution path
+      tft.setFont(&DS_Digital_Bold10pt7b);
+      tft.setTextColor(ST77XX_BLACK);
+      tft.setCursor(huX, huY + 12);
+      tft.print("HU 10/27");
+      
+      huVisible = false; 
+    }
   }
 
   delay(100); 
