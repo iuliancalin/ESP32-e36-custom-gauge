@@ -8,6 +8,7 @@
 #include "DS_Digital_Bold10pt7b.h" 
 #include "Fonts/FreeSansBold9pt7b.h"
 #include "Nunito_Regular10pt7b.h"
+#include "Illumination.h"
 
 // --- HARDWARE PIN ASSIGNMENTS ---
 #define TFT_CS         5   // Blue Wire
@@ -22,8 +23,8 @@
 #define OIL_TEMP_PIN  34   // NTC temperature sensor signal
 
 // --- COLOR CONFIGURATIONS (BMW OEM Amber/Orange Theme) ---
-#define COLOR_DARK_ORANGE  0x4060 // Scaled down exactly 50% dimmer on the same spectrum
-#define COLOR_LIGHT_ORANGE 0xfca0  // Bright light orange/amber for text
+#define COLOR_DARK_ORANGE  0x4860 // Scaled down exactly 50% dimmer on the same spectrum
+#define COLOR_LIGHT_ORANGE 0xfce0  // Bright light orange/amber for text
 #define COLOR_LIGHT_ORANGE_SMALL 0xfc80  // Bright light orange/amber for text
 #define COLOR_LIGHT_GREEN  0x1D80
 #define COLOR_LIGHT_BLUE   0x053B // Crisp bright blue for temporary HU check
@@ -276,37 +277,13 @@ void loop() {
     lastOilTemp = oilTemp;
   }
 
-  // ==========================================
-  // DYNAMIC HEADLIGHT ICON UPDATE (Font-based "D" + Vector Low Beams)
+// ==========================================
+  // DYNAMIC HEADLIGHT ICON UPDATE
   // ==========================================
   if (headlightsOn != lastHeadlightsState) {
-    int iconX = 40; 
-    int iconY = 135; 
     
-    // Determine the color based on headlight state (COLOR_LIGHT_GREEN to show)
-    uint16_t activeColor = headlightsOn ? COLOR_LIGHT_GREEN : ST77XX_BLACK;
-
-    // 1. Draw the Capital "D" using a clean sans-serif font
-    tft.setFont(&FreeSansBold9pt7b); 
-    tft.setTextColor(activeColor);
-    tft.setCursor(iconX - 4, iconY + 12); // Position adjusted for standard font baseline
-    tft.print("D");
-
-    // 2. Draw the 3 downward-sloping beam lines
-    // Top beam
-    tft.drawLine(iconX - 6, iconY - 8, iconX - 18, iconY - 4, activeColor);
-    tft.drawLine(iconX - 7, iconY - 7, iconX - 19, iconY - 3, activeColor); 
-    tft.drawLine(iconX - 8, iconY - 6, iconX - 20, iconY - 2, activeColor);
-
-    // Middle beam
-    tft.drawLine(iconX - 8, iconY - 0, iconX - 21, iconY + 5, activeColor);
-    tft.drawLine(iconX - 9, iconY + 1, iconX - 22, iconY + 6, activeColor); 
-    tft.drawLine(iconX - 10, iconY + 2, iconX - 23, iconY + 7, activeColor);
-
-    // Bottom beam
-    tft.drawLine(iconX - 10, iconY + 9, iconX - 24, iconY + 14, activeColor);
-    tft.drawLine(iconX - 11, iconY + 10, iconX - 25, iconY + 15, activeColor); 
-    tft.drawLine(iconX - 12, iconY + 11, iconX - 26, iconY + 16, activeColor);
+    // Call the function from your separate "Illumination" file!
+    drawLowBeamIcon(-10, 75, headlightsOn);
 
     lastHeadlightsState = headlightsOn;
   }
