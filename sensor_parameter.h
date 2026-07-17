@@ -15,7 +15,8 @@ struct NTCPoint {
 };
 
 const int TABLE_SIZE = 11;
-const NTCPoint table[TABLE_SIZE] = { 
+NTCPoint table[TABLE_SIZE] = {
+  {22, 56200}, {45, 21600}, {47, 20200}, {53, 16000}, {62, 11400},
   {71, 8500},  {75, 7200},  {83, 5500},  {87, 4700},  {90, 4500}, {92, 4200}
 };
 
