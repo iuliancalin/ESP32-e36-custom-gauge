@@ -168,12 +168,12 @@ void loop() {
     uint16_t w, h;
     String tempVal = (sensorDisconnected || oilTemp == 0) ? "---" : String((int)oilTemp);
     tft.getTextBounds(tempVal, oilTempUI.textX, oilTempUI.textY, &x1, &y1, &w, &h);
-    int degreeX = x1 + w + 4; 
+    int degreeX = x1 + w + 12; 
     
     tft.fillCircle(degreeX, degreeBaseY, degreeOuterR, COLOR_LIGHT_ORANGE);
     tft.fillCircle(degreeX, degreeBaseY, degreeInnerR, COLOR_DARK_ORANGE); 
     
-    tft.setCursor(degreeX + 9, oilTempUI.textY);
+    tft.setCursor(degreeX + 12, oilTempUI.textY);
     tft.setFont(&FreeSansBold9pt7b); 
     tft.print("C");
     
