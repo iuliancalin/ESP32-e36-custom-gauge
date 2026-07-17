@@ -1,192 +1,117 @@
 #include <SPI.h>
-#include <Adafruit_GFX.h>    // Core graphics library
-#include <Adafruit_ST7789.h> // Hardware-specific library for ST7789
+#include <Adafruit_GFX.h>    
+#include <Adafruit_ST7789.h> 
 
-// Include your custom gauge font
-#include "DS_Digital_Bold16pt7b.h"   
-#include "DS_Digital_Bold12pt7b.h" 
-#include "DS_Digital_Bold10pt7b.h" 
+// Custom Font Libraries
+#include "custom_fonts/DS_Digital_Bold16pt7b.h"   
+#include "custom_fonts/DS_Digital_Bold12pt7b.h" 
+#include "custom_fonts/DS_Digital_Bold10pt7b.h" 
 #include "Fonts/FreeSansBold9pt7b.h"
-#include "Nunito_Regular10pt7b.h"
-#include "Illumination.h"
+#include "custom_fonts/Nunito_Regular10pt7b.h"
+
+// Modular Segment Architecture
+#include "low_beam_icon.h"   
+#include "Illumination.h"   
+#include "sensor_parameter.h"
+#include "splash_screen.h"
+#include "hu_expiration.h"
 
 // --- HARDWARE PIN ASSIGNMENTS ---
-#define TFT_CS         5   // Blue Wire
-#define TFT_RST        4   // Yellow Wire
-#define TFT_DC         2   // Orange Wire
-#define TFT_MOSI      23   // Gray Wire (formerly Brown)
-#define TFT_SCLK      18   // Green Wire
-#define TFT_BL_PIN    15   // Backlight PWM Pin (Purple Wire) - LEAVE AS OUTPUT ONLY
+#define TFT_CS         5   
+#define TFT_RST        4   
+#define TFT_DC         2   
+#define TFT_MOSI      23   
+#define TFT_SCLK      18   
+#define TFT_BL_PIN    15   
 
-#define VOLT_PIN      35   // Battery Voltage tracker
-#define POT_PIN       32   // Instrument cluster dimmer circuit / Headlight sensor
-#define OIL_TEMP_PIN  34   // NTC temperature sensor signal
+// --- COLOR CONFIGURATIONS ---
+#define COLOR_DARK_ORANGE  0x4860 
+#define COLOR_LIGHT_ORANGE 0xfd00  
+#define COLOR_LIGHT_ORANGE_SMALL 0xfc80  
 
-// --- COLOR CONFIGURATIONS (BMW OEM Amber/Orange Theme) ---
-#define COLOR_DARK_ORANGE  0x4860 // Scaled down exactly 50% dimmer on the same spectrum
-#define COLOR_LIGHT_ORANGE 0xfd00  // Bright light orange/amber for text
-#define COLOR_LIGHT_ORANGE_SMALL 0xfc80  // Bright light orange/amber for text
-#define COLOR_LIGHT_GREEN  0x1D80
-#define COLOR_LIGHT_BLUE   0x053B // Crisp bright blue for temporary HU check
-
-// --- SENSOR PARAMETERS ---
-const float SERIES_RESISTOR = 10000.0; 
-const float TEMP_CALIBRATION_OFFSET = 4.0; 
-
-struct NTCPoint {
-  float temp;
-  float resistance;
+// =========================================================================
+// --- CENTRALIZED LAYOUT CONFIGURATION ---
+// =========================================================================
+struct ElementLayout {
+  int boxX, boxY, boxW, boxH;  // Bounding box for background clear blocks
+  int textX, textY;            // Core coordinate data line positioning
+  int labelX, labelY;          // Text identifier strings (e.g., "Battery")
 };
 
-const int TABLE_SIZE = 11;
-NTCPoint table[TABLE_SIZE] = { 
-  {71, 8500},  {75, 7200},  {83, 5500},  {87, 4700},  {90, 4500}, {92, 4200}
+// Layout coordinates for the Battery Voltage Monitor
+const ElementLayout batteryUI = {
+  .boxX   = 5,   .boxY   = 2,   // Background orange block position
+  .boxW   = 150, .boxH   = 56,  // Background block width and height
+  .textX  = 20,  .textY  = 55,  // The numeric voltage string position (e.g., "13.8V")
+  .labelX = 25,  .labelY = 80   // The static "Battery" text label underneath
 };
 
-bool sensorDisconnected = false;
-int lastPwmDuty = -1; // Cache for dimming PWM updates
+// Layout coordinates for the Oil Temperature display block
+const ElementLayout oilTempUI = {
+  .boxX   = 165, .boxY   = 2,   // Background orange block position
+  .boxW   = 150, .boxH   = 56,  // Background block width and height
+  .textX  = 185, .textY  = 55,  // The '---' or numeric temperature string position
+  .labelX = 185, .labelY = 80   // The static "Oil Temp" text label underneath
+};
 
-// State variables for flicker-free rendering
-float lastVoltage = -1.0;
-float lastOilTemp = -1.0;
-bool lastHeadlightsState = false;
-bool firstRun = true;
+// --- UI Vertical Divider Line Layout (Separates Battery and Oil Temp) ---
+const int dividerX = 162;       // X-coordinate center placement on the display
+const int dividerY = 0;         // Starting vertical coordinate (top edge)
+const int dividerW = 3;         // Thickness of the divider line in pixels
+const int dividerH = 70;        // Height of the divider line (matches background block)
 
-// Temporary HU display state
-unsigned long bootTime = 0;
-bool huVisible = true;
-const unsigned long HU_TIMEOUT = 10000; // 10 seconds
+// --- Headlight Indicator Placement ---
+const int iconX = 0;          // Horizontal offset for the low beam symbol matrix
+const int iconY = 70;           // Vertical coordinate where the 120x120 icon renders
 
-// Initialize SPI & Adafruit Driver
+// --- Custom Degree Circle (Symbol Erase Fix Context) ---
+const int degreeBaseY = 16;     // Exact vertical center for the custom ° ring overlay
+const int degreeOuterR = 6;     // Radius of the outer colored circle ring
+const int degreeInnerR = 3;     // Radius of the inner black mask circle ring
+// =========================================================================
+
+// --- SENSOR & SYSTEM GLOBAL STATES ---
+bool sensorDisconnected = false;// Flag tracking whether the NTC connection is lost
+int lastPwmDuty = -1;           // Last written backlight brightness value (0-255)
+
+// --- REFRESH MITIGATION STATES (Flicker-Free Guards) ---
+float lastVoltage = -1.0;       // Stores the previous voltage reading to guard screen updates
+float lastOilTemp = -1.0;       // Stores the previous temp calculation to guard screen updates
+bool lastHeadlightsState = false;// Stores the last known headlight loop switch state
+bool firstRun = true;           // Flag to force-render static assets on boot loop
+
+// --- TIMED HU OVERLAY TRACKING ---
+unsigned long bootTime = 0;     // Timestamp recorded right after setup() finishes execution
+bool huVisible = true;          // Flag control for the temporary display warning element
+const unsigned long HU_TIMEOUT = 10000; // Duration limit (10 seconds) before erasing HU popup
+const int huX = 140;            // Horizontal position for the HU inspection warning popup
+const int huY = 130;            // Vertical coordinate baseline for the HU alert box text
+
 SPIClass *vspi = new SPIClass(VSPI);
 Adafruit_ST7789 tft = Adafruit_ST7789(vspi, TFT_CS, TFT_DC, TFT_RST);
 
-// ==========================================
-// SENSOR READING FUNCTIONS
-// ==========================================
-float readNtcResistance() {
-  long sum = 0;
-  for (int i = 0; i < 20; i++) {
-    sum += analogRead(OIL_TEMP_PIN);
-    delay(2);
-  }
-  float rawAdc = sum / 20.0;
-  
-  if (rawAdc <= 50 || rawAdc >= 4020) { 
-    sensorDisconnected = true;
-    return -1.0; 
-  } 
-  
-  sensorDisconnected = false;
-  return SERIES_RESISTOR * ((4095.0 - rawAdc) / rawAdc);
-}
-
-float calculateTemperature(float currentResistance) {
-  if (sensorDisconnected || currentResistance <= 0) return 0;
-  if (currentResistance >= table[0].resistance) return table[0].temp; 
-  if (currentResistance <= table[TABLE_SIZE - 1].resistance) return table[TABLE_SIZE - 1].temp;
-
-  for (int i = 0; i < TABLE_SIZE - 1; i++) {
-    if (currentResistance <= table[i].resistance && currentResistance >= table[i + 1].resistance) {
-      float r0 = table[i].resistance;
-      float r1 = table[i + 1].resistance;
-      float t0 = table[i].temp;
-      float t1 = table[i + 1].temp;
-      return t0 + (currentResistance - r0) * ((t1 - t0) / (r1 - r0));
-    }
-  }
-  return 0; 
-}
-
-float readVoltage() {
-  long sum = 0;
-  for (int i = 0; i < 20; i++) {
-    sum += analogRead(VOLT_PIN);
-    delay(2);
-  }
-  float raw = sum / 20.0;
-  float adcVoltage = (raw / 4095.0) * 3.3;
-  
-  return (4.115 * adcVoltage) + 3.000;
-}
-
-// ==========================================
-// SETUP
-// ==========================================
 void setup() {
   Serial.begin(115200);
   analogReadResolution(12);
 
-  // Initialize Backlight PWM Pin as safe, pure output
   pinMode(TFT_BL_PIN, OUTPUT);
-  analogWrite(TFT_BL_PIN, 255); // Full brightness startup
+  analogWrite(TFT_BL_PIN, 255); 
 
-  // Start the SPI bus with hardware pins
   vspi->begin(TFT_SCLK, -1, TFT_MOSI, TFT_CS);
 
-  // Initialize display controller (172 x 320)
   tft.init(172, 320);
-  tft.setRotation(3);        // Landscape flipped 180 (wires on right side)
-  tft.invertDisplay(true);   // Corrects color inversion on ST7789
+  tft.setRotation(3);        
+  tft.invertDisplay(true);   
   tft.fillScreen(ST77XX_BLACK);
 
-  // ==========================================
-  // ANIMATED SPLASH SCREEN (Optimized to prevent flickering)
-  // ==========================================
-  tft.setTextColor(COLOR_LIGHT_ORANGE, ST77XX_BLACK); // Set solid background color to overwrite old dots
-  tft.setFont(); 
-  tft.setTextSize(4);
-  tft.setCursor(80, 45); 
-  tft.print("BMW E36");
-
-  tft.setTextSize(2);
-  tft.setCursor(80, 95);
-  tft.print("Initializing");
-
-  for (int i = 0; i < 12; i++) {
-    // Overwrite old dots area with a tiny black box instead of clearing the whole screen
-    tft.fillRect(238, 95, 45, 20, ST77XX_BLACK);
-    tft.setCursor(238, 95);
-    
-    // Animated dots
-    switch (i % 4) {
-      case 1: tft.print(".");   break;
-      case 2: tft.print("..");  break;
-      case 3: tft.print("..."); break;
-    }
-
-    delay(180);
-  }
-
-  tft.fillScreen(ST77XX_BLACK);
-  bootTime = millis(); // Lock in startup time reference when main screens load
+  renderSplashScreen();
+  bootTime = millis(); 
 }
 
-// ==========================================
-// MAIN LOOP (Flicker-Free, Multi-Update)
-// ==========================================
 void loop() {
-  // ==========================================
-  // PWM BACKLIGHT DIMMING & LIGHT STATE SENSING
-  // ==========================================
-  int potValue = analogRead(POT_PIN);
-  int targetPwm = 255; // Full brightness during day
   bool headlightsOn = false;
+  updateClusterIllumination(lastPwmDuty, headlightsOn);
 
-  if (potValue >= 180) {
-    headlightsOn = true;
-    // Map cluster dimmer signal to PWM range (255 down to ~15 for night)
-    targetPwm = map(potValue, 180, 4095, 10, 150); 
-  }
-
-  if (targetPwm != lastPwmDuty) {
-    analogWrite(TFT_BL_PIN, targetPwm);
-    lastPwmDuty = targetPwm;
-  }
-
-  // ==========================================
-  // SENSOR READINGS
-  // ==========================================
   float voltage = readVoltage();
   float ntcResistance = readNtcResistance();
   float oilTemp = calculateTemperature(ntcResistance);
@@ -195,61 +120,42 @@ void loop() {
     oilTemp += TEMP_CALIBRATION_OFFSET;
   }
 
-  // ==========================================
-  // ONE-TIME STATIC DRAW (Top block, lines & labels)
-  // ==========================================
+  // --- STATIC DRAW CANVAS ---
   if (firstRun) {
     tft.fillScreen(ST77XX_BLACK);
-    
-    // Draw the solid dark orange canvas across the entire top half (Y: 0 to 70)
     tft.fillRect(0, 0, 320, 70, COLOR_DARK_ORANGE);
-    
-    // Draw a 2-pixel light orange divider line splitting the left and right orange sections
-    tft.fillRect(162, 0, 3, 70, COLOR_LIGHT_ORANGE);
+    tft.fillRect(dividerX, dividerY, dividerW, dividerH, COLOR_LIGHT_ORANGE);
 
-    // Static Labels (printed directly on top of the dark orange background)
-    tft.setFont(); // Standard font
+    tft.setFont(); 
     tft.setTextSize(2);
     tft.setTextColor(COLOR_LIGHT_ORANGE_SMALL); 
     
-    tft.setCursor(25, 80);
+    tft.setCursor(batteryUI.labelX, batteryUI.labelY);
     tft.print("Battery");
-    tft.setCursor(185, 80);
+    tft.setCursor(oilTempUI.labelX, oilTempUI.labelY);
     tft.print("Oil Temp");
     
     firstRun = false;
   }
 
-  // ==========================================
-  // DYNAMIC VOLTAGE UPDATE
-  // ==========================================
+  // --- DYNAMIC VOLTAGE UPDATE ---
   if (abs(voltage - lastVoltage) >= 0.1) {
-    // Completely clears down to Y: 58 to prevent character stacking artifacts
-    tft.fillRect(5, 2, 150, 56, COLOR_DARK_ORANGE);
-
+    tft.fillRect(batteryUI.boxX, batteryUI.boxY, batteryUI.boxW, batteryUI.boxH, COLOR_DARK_ORANGE);
     tft.setFont(&DS_Digital_Bold16pt7b);
     tft.setTextColor(COLOR_LIGHT_ORANGE); 
-    tft.setCursor(20, 55);   
-    
-    // Voltage string print shortened to 1 decimal format
+    tft.setCursor(batteryUI.textX, batteryUI.textY);   
     tft.print(voltage, 1); 
-    
     tft.setFont(&FreeSansBold9pt7b);
     tft.print("V");
-    
     lastVoltage = voltage;
   }
 
-  // ==========================================
-  // DYNAMIC TEMPERATURE UPDATE
-  // ==========================================
+  // --- DYNAMIC TEMPERATURE UPDATE ---
   if (abs(oilTemp - lastOilTemp) >= 1.0) {
-    // Completely clears down to Y: 58 to prevent character stacking artifacts
-    tft.fillRect(165, 2, 150, 56, COLOR_DARK_ORANGE);
-
+    tft.fillRect(oilTempUI.boxX, oilTempUI.boxY, oilTempUI.boxW, oilTempUI.boxH, COLOR_DARK_ORANGE);
     tft.setFont(&DS_Digital_Bold16pt7b);
     tft.setTextColor(COLOR_LIGHT_ORANGE); 
-    tft.setCursor(185, 55); 
+    tft.setCursor(oilTempUI.textX, oilTempUI.textY); 
     
     if (sensorDisconnected || oilTemp == 0) {
       tft.print("---"); 
@@ -257,64 +163,31 @@ void loop() {
       tft.print(oilTemp, 0); 
     }
     
-    // Dynamic custom degree symbol drawing (LEFT ALONE)
+    // --- DEGREE SYMBOL (Using the user's Degree Symbol Erase Fix) ---
     int16_t x1, y1;
     uint16_t w, h;
     String tempVal = (sensorDisconnected || oilTemp == 0) ? "---" : String((int)oilTemp);
-    tft.getTextBounds(tempVal, 195, 34, &x1, &y1, &w, &h);
+    tft.getTextBounds(tempVal, oilTempUI.textX, oilTempUI.textY, &x1, &y1, &w, &h);
     int degreeX = x1 + w + 4; 
     
-    int rOuter = 6;
-    int rInner = 3;
-
-    tft.fillCircle(degreeX, 16, rOuter, COLOR_LIGHT_ORANGE);
-    tft.fillCircle(degreeX, 16, rInner, COLOR_DARK_ORANGE); 
+    tft.fillCircle(degreeX, degreeBaseY, degreeOuterR, COLOR_LIGHT_ORANGE);
+    tft.fillCircle(degreeX, degreeBaseY, degreeInnerR, COLOR_DARK_ORANGE); 
     
-    tft.setCursor(degreeX + 9, 55);
+    tft.setCursor(degreeX + 9, oilTempUI.textY);
     tft.setFont(&FreeSansBold9pt7b); 
     tft.print("C");
     
     lastOilTemp = oilTemp;
   }
 
-// ==========================================
-  // DYNAMIC HEADLIGHT ICON UPDATE
-  // ==========================================
+  // --- DYNAMIC HEADLIGHT ICON UPDATE ---
   if (headlightsOn != lastHeadlightsState) {
-    
-    // Call the function from your separate "Illumination" file!
-    drawLowBeamIcon(-10, 75, headlightsOn);
-
+    drawLowBeamIcon(iconX, iconY, headlightsOn);
     lastHeadlightsState = headlightsOn;
   }
 
-  // ==========================================
-  // TEMPORARY HU EXPIRATION DISPLAY (10-Second Timer)
-  // ==========================================
-  if (huVisible) {
-    int huX = 110; // Placed next to headlight icon (which spans X: 14 to 40)
-    int huY = 135; // Match icon's Y reference level
-
-    if (millis() - bootTime < HU_TIMEOUT) {
-      // Draw the text in crisp Blue (only runs on the first few loops)
-      static bool firstDraw = true;
-      if (firstDraw) {
-        tft.setFont(&DS_Digital_Bold10pt7b);
-        tft.setTextColor(COLOR_LIGHT_BLUE);
-        tft.setCursor(huX, huY + 12); // Matches baseline shift of your 'D' character
-        tft.print("HU 10/27");
-        firstDraw = false;
-      }
-    } else {
-      // Time is up! Draw in Black to erase, then kill this code execution path
-      tft.setFont(&DS_Digital_Bold10pt7b);
-      tft.setTextColor(ST77XX_BLACK);
-      tft.setCursor(huX, huY + 12);
-      tft.print("HU 10/27");
-      
-      huVisible = false; 
-    }
-  }
+  // --- TIMED HU EXPIRATION OVERLAY ---
+  handleHuExpiration(huVisible, bootTime, HU_TIMEOUT);
 
   delay(100); 
 }
