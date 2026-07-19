@@ -157,23 +157,23 @@ void loop() {
     tft.setTextColor(COLOR_LIGHT_ORANGE); 
     tft.setCursor(oilTempUI.textX, oilTempUI.textY); 
     
+    int degreeX = oilTempUI.textX; // Initialize variable
+    
     if (sensorDisconnected || oilTemp == 0) {
       tft.print("---"); 
+      // Push the degree symbol further right to clear the wide triple-dashes
+      degreeX += 90; 
     } else {
       tft.print(oilTemp, 0); 
+      // Keep the original snug fit for 2-digit numbers
+      degreeX += 42; 
     }
     
-    // --- DEGREE SYMBOL (Using the user's Degree Symbol Erase Fix) ---
-    int16_t x1, y1;
-    uint16_t w, h;
-    String tempVal = (sensorDisconnected || oilTemp == 0) ? "---" : String((int)oilTemp);
-    tft.getTextBounds(tempVal, oilTempUI.textX, oilTempUI.textY, &x1, &y1, &w, &h);
-    int degreeX = x1 + w + 12; 
-    
+    // --- DEGREE SYMBOL DRAWING ---
     tft.fillCircle(degreeX, degreeBaseY, degreeOuterR, COLOR_LIGHT_ORANGE);
     tft.fillCircle(degreeX, degreeBaseY, degreeInnerR, COLOR_DARK_ORANGE); 
     
-    tft.setCursor(degreeX + 12, oilTempUI.textY);
+    tft.setCursor(degreeX + 9, oilTempUI.textY);
     tft.setFont(&FreeSansBold9pt7b); 
     tft.print("C");
     
