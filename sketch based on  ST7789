@@ -167,8 +167,8 @@ void loop() {
       degreeX += 90; 
     } else {
       tft.print(oilTemp, 0); 
-      // Dynamic shift: 2 digits = 42px offset, 3 digits (100°C+) = 60px offset
-      degreeX += (oilTemp >= 100) ? 60 : 42; 
+      // Dynamic shift: 2 digits = 75px offset, 3 digits (100°C+) = 60px offset
+      degreeX += (oilTemp >= 100) ? 60 : 75; 
     }
     
     // --- DEGREE SYMBOL DRAWING ---
