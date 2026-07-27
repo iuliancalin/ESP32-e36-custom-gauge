@@ -3,10 +3,11 @@
 
 #include <Arduino.h>
 
-#define VOLT_PIN      35   
-#define OIL_TEMP_PIN  34   
+// --- UPDATED HARDWARE PINS (ES32C14 BOARD SPEC) ---
+#define VOLT_PIN       32   // Free Port GPIO32 - Voltage Sense Module (S output)
+#define OIL_TEMP_PIN   33   // Free Port / Analog Input - Oil Temp Sensor
 
-const float SERIES_RESISTOR = 10000.0; 
+const float SERIES_RESISTOR = 20000.0; 
 const float TEMP_CALIBRATION_OFFSET = 4.0; 
 
 struct NTCPoint {
@@ -37,7 +38,8 @@ inline float readNtcResistance() {
   } 
   
   sensorDisconnected = false;
-  return SERIES_RESISTOR * ((4095.0 - rawAdc) / rawAdc);
+  // Formula for 3.3V feed with 20k pull-down to GND
+  return SERIES_RESISTOR * ((4095.0 / rawAdc) - 1.0);
 }
 
 inline float calculateTemperature(float currentResistance) {
@@ -64,9 +66,9 @@ inline float readVoltage() {
     delay(2);
   }
   float raw = sum / 20.0;
-  float adcVoltage = (raw / 4095.0) * 3.3;
   
-  return (4.115 * adcVoltage) + 3.000;
+  // Single calibrated multiplier for the 15k / 3.3k divider
+  // Adjust 0.004818 up or down slightly to match your multimeter!
+  return raw * 0.004728; 
 }
-
 #endif
