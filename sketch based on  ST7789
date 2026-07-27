@@ -14,15 +14,15 @@
 #include "Illumination.h"   
 #include "sensor_parameter.h"
 #include "splash_screen.h"
-#include "hu_expiration.h"
+#include "comfort_blinker.h"
 
-// --- HARDWARE PIN ASSIGNMENTS ---
-#define TFT_CS         5   
-#define TFT_RST        4   
-#define TFT_DC         2   
-#define TFT_MOSI      23   
-#define TFT_SCLK      18   
-#define TFT_BL_PIN    15   
+// --- HARDWARE PIN ASSIGNMENTS (V2 MASTER SPECIFICATION) ---
+#define TFT_CS        0   // Display CS (8-Pin Header Pin 7)
+#define TFT_RST      16   // Display RES (8-Pin Header Pin 5)
+#define TFT_DC        4   // Display DC (8-Pin Header Pin 6)
+#define TFT_MOSI     21   // Display SDA (8-Pin Header Pin 4)
+#define TFT_SCLK     23   // Display SCL (8-Pin Header Pin 3)
+#define TFT_BL_PIN    2   // Display Backlight (8-Pin Header Pin 8)
 
 // --- COLOR CONFIGURATIONS ---
 #define COLOR_DARK_ORANGE  0x4860 
@@ -80,19 +80,16 @@ float lastOilTemp = -1.0;       // Stores the previous temp calculation to guard
 bool lastHeadlightsState = false;// Stores the last known headlight loop switch state
 bool firstRun = true;           // Flag to force-render static assets on boot loop
 
-// --- TIMED HU OVERLAY TRACKING ---
-unsigned long bootTime = 0;     // Timestamp recorded right after setup() finishes execution
-bool huVisible = true;          // Flag control for the temporary display warning element
-const unsigned long HU_TIMEOUT = 10000; // Duration limit (10 seconds) before erasing HU popup
-const int huX = 140;            // Horizontal position for the HU inspection warning popup
-const int huY = 130;            // Vertical coordinate baseline for the HU alert box text
-
+// --- HARDWARE INSTANCES ---
 SPIClass *vspi = new SPIClass(VSPI);
 Adafruit_ST7789 tft = Adafruit_ST7789(vspi, TFT_CS, TFT_DC, TFT_RST);
 
 void setup() {
   Serial.begin(115200);
   analogReadResolution(12);
+
+  // Initialize Comfort Blinker Pins (IN1, IN2 inputs & Relay 1, Relay 2 outputs)
+  setupBlinkers();
 
   pinMode(TFT_BL_PIN, OUTPUT);
   analogWrite(TFT_BL_PIN, 255); 
@@ -105,10 +102,13 @@ void setup() {
   tft.fillScreen(ST77XX_BLACK);
 
   renderSplashScreen();
-  bootTime = millis(); 
 }
 
 void loop() {
+  // --- NON-BLOCKING COMFORT BLINKER PROCESSOR ---
+  // Runs every loop cycle to monitor turn signal taps and toggle relays instantly
+  handleComfortBlinkers();
+
   bool headlightsOn = false;
   updateClusterIllumination(lastPwmDuty, headlightsOn);
 
@@ -189,8 +189,6 @@ void loop() {
     lastHeadlightsState = headlightsOn;
   }
 
-  // --- TIMED HU EXPIRATION OVERLAY ---
-  handleHuExpiration(huVisible, bootTime, HU_TIMEOUT);
-
-  delay(100); 
+  // Keep delay low so blinker timing stays accurate (10ms)
+  delay(10); 
 }
