@@ -8,25 +8,35 @@
 extern Adafruit_ST7789 tft;
 extern const uint16_t low_beam_icon[] PROGMEM; 
 
-// Share the dimensions already defined inside low_beam_icon.h
+// Share dimensions defined inside low_beam_icon.h
 extern const uint16_t LOW_BEAM_WIDTH;
 extern const uint16_t LOW_BEAM_HEIGHT;
 
-#define POT_PIN       32
-#define TFT_BL_PIN    15
+// --- HARDWARE PINS (V2 MASTER SPECIFICATION) ---
+#define POT_PIN          36  // Vi1 - Standlicht / Potentiometer input for dimming
+#define PIN_ABBLENDLICHT 39  // Vi2 - Abblendlicht / Low Beam 12V Trigger
+#define TFT_BL_PIN        2  // Display Backlight Control Output
 
-// Processes the headlight state and pot-driven cluster dimming duty cycle
-inline void updateClusterIllumination(int &lastPwmDuty, bool &headlightsOn) {
+// Lowered threshold to compensate for the inline protection resistor voltage drop
+const int TRIGGER_THRESHOLD = 800; 
+
+// Processes the headlight icon state AND park light duty cycle separately
+inline void updateClusterIllumination(int &lastPwmDuty, bool &lowBeamOn) {
+  // 1. Check Low Beam trigger independently (ONLY for icon logic)
+  int abblendlichtVal = analogRead(PIN_ABBLENDLICHT);
+  lowBeamOn = (abblendlichtVal >= TRIGGER_THRESHOLD);
+
+  // 2. Dimming logic driven ONLY by Standlicht (POT_PIN / Vi1)
   int potValue = analogRead(POT_PIN);
   int targetPwm = 255; 
-  headlightsOn = false;
 
+  // Standlicht threshold check
   if (potValue >= 180) {
-    headlightsOn = true;
     targetPwm = map(potValue, 180, 4095, 10, 150); 
   }
 
-  if (targetPwm != lastPwmDuty) {
+  // Only update PWM if duty cycle changes by more than 2 steps (prevents ADC flicker)
+  if (abs(targetPwm - lastPwmDuty) > 2) {
     analogWrite(TFT_BL_PIN, targetPwm);
     lastPwmDuty = targetPwm;
   }
@@ -63,4 +73,4 @@ inline void drawLowBeamIcon(int x, int y, bool state) {
   }
 }
 
-#endif // Make sure this is still at the absolute bottom
+#endif
