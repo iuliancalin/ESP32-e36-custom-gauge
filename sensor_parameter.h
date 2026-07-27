@@ -8,7 +8,7 @@
 #define OIL_TEMP_PIN   33   // Oil Temp Sensor
 
 const float SERIES_RESISTOR = 20000.0; 
-const float TEMP_CALIBRATION_OFFSET = -4.0; 
+const float TEMP_CALIBRATION_OFFSET = 4.0; 
 
 struct NTCPoint {
   float temp;
