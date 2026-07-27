@@ -4,8 +4,8 @@
 #include <Arduino.h>
 
 // --- UPDATED HARDWARE PINS (ES32C14 BOARD SPEC) ---
-#define VOLT_PIN       32   // Free Port GPIO32 - Voltage Sense Module (S output)
-#define OIL_TEMP_PIN   33   // Free Port / Analog Input - Oil Temp Sensor
+#define VOLT_PIN       32   // Voltage Sense 
+#define OIL_TEMP_PIN   33   // Oil Temp Sensor
 
 const float SERIES_RESISTOR = 20000.0; 
 const float TEMP_CALIBRATION_OFFSET = 4.0; 
