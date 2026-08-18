@@ -7,18 +7,37 @@
 #define VOLT_PIN       32   // Voltage Sense 
 #define OIL_TEMP_PIN   33   // Oil Temp Sensor
 
-const float SERIES_RESISTOR = 20000.0; 
-const float TEMP_CALIBRATION_OFFSET = 4.0; 
+const float SERIES_RESISTOR = 51000.0; 
+const float TEMP_CALIBRATION_OFFSET = 3; 
 
 struct NTCPoint {
   float temp;
   float resistance;
 };
 
-const int TABLE_SIZE = 11;
+
+const int TABLE_SIZE = 20;
 NTCPoint table[TABLE_SIZE] = {
-  {22, 56200}, {45, 21600}, {47, 20200}, {53, 16000}, {62, 11400},
-  {71, 8500},  {75, 7200},  {83, 5500},  {87, 4700},  {90, 4500}, {92, 4200}
+  {5, 143000},  
+  {10, 102000}, 
+  {15, 75000}, 
+  {20, 60000}, 
+  {25, 48500}, 
+  {30, 39000}, 
+  {35, 32000}, 
+  {40, 25000}, 
+  {45, 21000}, 
+  {50, 17500},
+  {55, 14500},
+  {60, 12000},
+  {65, 10000},  
+  {70, 8500},  
+  {75, 7200}, 
+  {80, 6200}, 
+  {85, 5400},  
+  {90, 4200}, 
+  {95, 3500},
+  {100, 3200}
 };
 
 extern bool sensorDisconnected;
@@ -43,7 +62,7 @@ inline float readNtcResistance() {
 }
 
 inline float calculateTemperature(float currentResistance) {
-  if (sensorDisconnected || currentResistance <= 0) return 0;
+  if (sensorDisconnected || currentResistance <= 0) return -999.0;
   if (currentResistance >= table[0].resistance) return table[0].temp; 
   if (currentResistance <= table[TABLE_SIZE - 1].resistance) return table[TABLE_SIZE - 1].temp;
 
@@ -56,7 +75,7 @@ inline float calculateTemperature(float currentResistance) {
       return t0 + (currentResistance - r0) * ((t1 - t0) / (r1 - r0));
     }
   }
-  return 0; 
+  return -999.0; 
 }
 
 inline float readVoltage() {

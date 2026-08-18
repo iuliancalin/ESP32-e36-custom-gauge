@@ -13,8 +13,8 @@ extern const uint16_t LOW_BEAM_WIDTH;
 extern const uint16_t LOW_BEAM_HEIGHT;
 
 // --- HARDWARE PINS (V2 MASTER SPECIFICATION) ---
-#define POT_PIN          36  // Vi1 - Standlicht / Potentiometer input for dimming
-#define PIN_ABBLENDLICHT 39  // Vi2 - Abblendlicht / Low Beam 12V Trigger
+#define POT_PIN          39  // Vi1 - Standlicht / Potentiometer input for dimming
+#define PIN_ABBLENDLICHT 36  // Vi2 - Abblendlicht / Low Beam 12V Trigger
 #define TFT_BL_PIN        2  // Display Backlight Control Output
 
 // Lowered threshold to compensate for the inline protection resistor voltage drop
