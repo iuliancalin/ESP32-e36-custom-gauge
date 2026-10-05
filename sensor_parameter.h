@@ -16,7 +16,7 @@ struct NTCPoint {
 };
 
 
-const int TABLE_SIZE = 24;
+const int TABLE_SIZE = 30;
 NTCPoint table[TABLE_SIZE] = {
   {5, 143000},  
   {10, 102000}, 
@@ -41,7 +41,13 @@ NTCPoint table[TABLE_SIZE] = {
   {105, 2850},
   {110, 2550},
   {115, 2300},
-  {120, 2080}
+  {120, 2080},
+  {125, 1880},
+  {130, 1700},
+  {135, 1550},
+  {140, 1410},
+  {145, 1290},
+  {150, 1180}
 };
 
 extern bool sensorDisconnected;
@@ -55,7 +61,7 @@ inline float readNtcResistance() {
   }
   float rawAdc = sum / 20.0;
   
-  if (rawAdc <= 50 || rawAdc >= 4020) { 
+  if (rawAdc <= 50 || rawAdc >= 4085) { 
     sensorDisconnected = true;
     return -1.0; 
   } 
