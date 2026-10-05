@@ -8,7 +8,7 @@
 #define OIL_TEMP_PIN   33   // Oil Temp Sensor
 
 const float SERIES_RESISTOR = 51000.0; 
-const float TEMP_CALIBRATION_OFFSET = 3; 
+const float TEMP_CALIBRATION_OFFSET = 0; 
 
 struct NTCPoint {
   float temp;
@@ -16,7 +16,7 @@ struct NTCPoint {
 };
 
 
-const int TABLE_SIZE = 20;
+const int TABLE_SIZE = 24;
 NTCPoint table[TABLE_SIZE] = {
   {5, 143000},  
   {10, 102000}, 
@@ -37,7 +37,11 @@ NTCPoint table[TABLE_SIZE] = {
   {85, 5400},  
   {90, 4200}, 
   {95, 3500},
-  {100, 3200}
+  {100, 3200},
+  {105, 2850},
+  {110, 2550},
+  {115, 2300},
+  {120, 2080}
 };
 
 extern bool sensorDisconnected;
@@ -58,7 +62,7 @@ inline float readNtcResistance() {
   
   sensorDisconnected = false;
   // Formula for 3.3V feed with 20k pull-down to GND
-  return SERIES_RESISTOR * ((4095.0 / rawAdc) - 1.0);
+  return SERIES_RESISTOR * ((4150.0 / rawAdc) - 1.0);
 }
 
 inline float calculateTemperature(float currentResistance) {
@@ -88,6 +92,6 @@ inline float readVoltage() {
   
   // Single calibrated multiplier for the 15k / 3.3k divider
   // Adjust 0.004818 up or down slightly to match your multimeter!
-  return raw * 0.004728; 
+  return raw * 0.004668; 
 }
 #endif
