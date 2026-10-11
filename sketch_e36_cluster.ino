@@ -4,16 +4,11 @@
 
 // Custom Font Libraries
 #include "custom_fonts/DS_Digital_Bold12pt7b.h"
-#include "custom_fonts/DS_Digital_Bold10pt7b.h"
 
 // --- COLOR CONFIGURATIONS ---
 #define COLOR_DARK_ORANGE        0x0800
 #define COLOR_LIGHT_ORANGE       0xfa20
 #define COLOR_LIGHT_ORANGE_SMALL 0xfc80
-
-// --- FONT CONFIGURATIONS ---
-// Change this single line to swap unit fonts ("V" and "C") across the whole sketch:
-#define LABEL_FONT DS_Digital_Bold10pt7b
 
 // Modular Segment Architecture
 #include "low_beam_icon.h"
@@ -162,9 +157,6 @@ void loop() {
     tft.setCursor(clearX, batteryUI.boxY + batteryUI.offsetY);
     tft.print(voltage, 1);
 
-    tft.setFont(&LABEL_FONT);
-    tft.print("V");
-
     lastVoltage = voltage;
   }
 
@@ -195,11 +187,6 @@ void loop() {
       // Draw degree ring
       tft.fillCircle(degreeX, degreeY, degreeOuterR, COLOR_LIGHT_ORANGE);
       tft.fillCircle(degreeX, degreeY, degreeInnerR, COLOR_DARK_ORANGE);
-
-      // Draw 'C' offset from the degree ring
-      tft.setCursor(degreeX + 7, textY);
-      tft.setFont(&LABEL_FONT);
-      tft.print("C");
     }
 
     lastOilTemp = oilTemp;
