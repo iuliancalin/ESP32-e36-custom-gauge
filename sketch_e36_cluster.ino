@@ -28,6 +28,7 @@
 #include "cruise_control.h"
 #include "battery_icon.h"
 #include "oil_icon.h"
+#include "oil_warmup_bar.h"
 
 // --- HARDWARE PIN ASSIGNMENTS ---
 #define TFT_CS        0   // Display CS
@@ -216,6 +217,9 @@ void loop() {
   // --- DYNAMIC CRUISE CONTROL ICON UPDATE ---
   bool cruiseActive = (digitalRead(CRUISE_IN_PIN) == LOW);
   drawCruiseIcon(cruiseIconX, cruiseIconY, cruiseActive);
+
+  // --- DYNAMIC OIL WARM-UP BAR UPDATE ---
+  drawOilWarmupBar(oilTemp, sensorDisconnected);
 
   delay(10);
 }
