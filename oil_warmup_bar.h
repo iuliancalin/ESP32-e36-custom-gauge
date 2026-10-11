@@ -4,7 +4,13 @@
 #include <Arduino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
-#include <Fonts/FreeSansBold9pt7b.h>
+#include "custom_fonts/Eurostile_Bold10pt7b.h"
+#include "custom_fonts/DIN_1451_Bold10pt7b.h"
+
+// --- FONT SELECTION FOR WARM-UP LABEL ---
+// Option 1 (Iconic 90s sports car cockpit): Eurostile_Bold10pt7b
+// Option 2 (OEM German industrial standard): DIN_1451_Bold10pt7b
+#define WARMUP_LABEL_FONT Eurostile_Bold10pt7b
 
 extern Adafruit_ST7789 tft;
 
@@ -113,7 +119,7 @@ inline void drawOilWarmupBar(float currentTemp, bool isDisconnected) {
   tft.fillRect(WARMUP_BOX_X, WARMUP_BOX_Y, WARMUP_BOX_W, WARMUP_BAR_Y - WARMUP_BOX_Y, ST77XX_BLACK);
 
   // Draw Status Label centered
-  tft.setFont(&DS_Digital_Bold10pt7b);
+  tft.setFont(&WARMUP_LABEL_FONT);
   tft.setTextColor(barColor);
   int16_t x1, y1;
   uint16_t w, h;

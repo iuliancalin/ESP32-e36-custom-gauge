@@ -3,11 +3,8 @@
 #include <Adafruit_ST7789.h>
 
 // Custom Font Libraries
-#include "custom_fonts/DS_Digital_Bold16pt7b.h"
 #include "custom_fonts/DS_Digital_Bold12pt7b.h"
 #include "custom_fonts/DS_Digital_Bold10pt7b.h"
-#include "Fonts/FreeSansBold9pt7b.h"
-#include "custom_fonts/Nunito_Regular10pt7b.h"
 
 // --- COLOR CONFIGURATIONS ---
 #define COLOR_DARK_ORANGE        0x0800
