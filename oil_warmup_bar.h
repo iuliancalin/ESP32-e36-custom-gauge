@@ -21,8 +21,8 @@ const int WARMUP_BAR_H = 12;
 
 // Temperature thresholds
 const float TEMP_COLD_MAX   = 30.0; // Below 30°C: RED (Cold)
-const float TEMP_WARM_MAX   = 70.0; // 30°C - 70°C: YELLOW (Warming up)
-const float TEMP_FULL_READY = 85.0; // 85°C: Progress bar reaches 100% full
+const float TEMP_WARM_MAX   = 60.0; // 30°C - 60°C: YELLOW (Warming up)
+const float TEMP_FULL_READY = 75.0; // 75°C: Progress bar reaches 100% full
 const float TEMP_OVERHEAT   = 125.0; // 125°C+: Red Overheat warning
 
 inline void drawOilWarmupBar(float currentTemp, bool isDisconnected) {
@@ -41,13 +41,13 @@ inline void drawOilWarmupBar(float currentTemp, bool isDisconnected) {
     barColor = ST77XX_RED;
     label = "COLD";
   } else if (currentTemp < TEMP_WARM_MAX) {
-    barColor = ST77XX_YELLOW;
+    barColor = 0xbd83;
     label = "WARMING";
   } else if (currentTemp < TEMP_OVERHEAT) {
-    barColor = ST77XX_GREEN;
+    barColor = 0x0400;
     label = "READY";
   } else {
-    barColor = ST77XX_RED;
+    barColor = 0x9041;
     label = "HOT!";
   }
 
@@ -63,7 +63,7 @@ inline void drawOilWarmupBar(float currentTemp, bool isDisconnected) {
   tft.fillRect(WARMUP_BOX_X, WARMUP_BOX_Y, WARMUP_BOX_W, 28, ST77XX_BLACK);
 
   // Draw Status Label centered
-  tft.setFont(&FreeSansBold9pt7b);
+  tft.setFont(&DS_Digital_Bold10pt7b);
   tft.setTextColor(barColor);
   int16_t x1, y1;
   uint16_t w, h;
