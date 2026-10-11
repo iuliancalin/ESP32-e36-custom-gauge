@@ -25,42 +25,92 @@ const float TEMP_WARM_MAX   = 60.0; // 30°C - 60°C: YELLOW (Warming up)
 const float TEMP_FULL_READY = 75.0; // 75°C: Progress bar reaches 100% full
 const float TEMP_OVERHEAT   = 125.0; // 125°C+: Red Overheat warning
 
+enum WarmupState {
+  STATE_UNKNOWN,
+  STATE_COLD,
+  STATE_WARMING,
+  STATE_READY,
+  STATE_HOT,
+  STATE_DISCONNECTED
+};
+
 inline void drawOilWarmupBar(float currentTemp, bool isDisconnected) {
   static float lastDrawnTemp = -999.0;
   static bool lastDisconnected = false;
-  static uint16_t lastDrawnColor = 0;
+  static WarmupState currentState = STATE_UNKNOWN;
 
-  // Determine current color state
+  // Determine State with Hysteresis (prevents rapid flickering between labels at boundary temps)
+  if (isDisconnected || currentTemp <= -900.0) {
+    currentState = STATE_DISCONNECTED;
+  } else {
+    switch (currentState) {
+      case STATE_DISCONNECTED:
+      case STATE_UNKNOWN:
+        if (currentTemp < TEMP_COLD_MAX) currentState = STATE_COLD;
+        else if (currentTemp < TEMP_WARM_MAX) currentState = STATE_WARMING;
+        else if (currentTemp < TEMP_OVERHEAT) currentState = STATE_READY;
+        else currentState = STATE_HOT;
+        break;
+
+      case STATE_COLD:
+        if (currentTemp >= TEMP_COLD_MAX) currentState = STATE_WARMING;
+        break;
+
+      case STATE_WARMING:
+        if (currentTemp < (TEMP_COLD_MAX - 1.5)) currentState = STATE_COLD;
+        else if (currentTemp >= TEMP_WARM_MAX) currentState = STATE_READY;
+        break;
+
+      case STATE_READY:
+        if (currentTemp < (TEMP_WARM_MAX - 1.5)) currentState = STATE_WARMING;
+        else if (currentTemp >= TEMP_OVERHEAT) currentState = STATE_HOT;
+        break;
+
+      case STATE_HOT:
+        if (currentTemp < (TEMP_OVERHEAT - 2.0)) currentState = STATE_READY;
+        break;
+    }
+  }
+
+  // Set colors and labels based on stable state
   uint16_t barColor;
   const char* label;
 
-  if (isDisconnected || currentTemp <= -900.0) {
-    barColor = 0x4208; // Dim gray
-    label = "--";
-  } else if (currentTemp < TEMP_COLD_MAX) {
-    barColor = ST77XX_RED;
-    label = "COLD";
-  } else if (currentTemp < TEMP_WARM_MAX) {
-    barColor = 0xbd83;
-    label = "WARMING";
-  } else if (currentTemp < TEMP_OVERHEAT) {
-    barColor = 0x0400;
-    label = "READY";
-  } else {
-    barColor = 0x9041;
-    label = "HOT!";
+  switch (currentState) {
+    case STATE_COLD:
+      barColor = ST77XX_RED;
+      label = "COLD";
+      break;
+    case STATE_WARMING:
+      barColor = 0xbd83;
+      label = "WARMING";
+      break;
+    case STATE_READY:
+      barColor = 0x0400;
+      label = "READY";
+      break;
+    case STATE_HOT:
+      barColor = 0x9041;
+      label = "HOT!";
+      break;
+    case STATE_DISCONNECTED:
+    default:
+      barColor = 0x4208; // Dim gray
+      label = "--";
+      break;
   }
 
-  // Redraw only when temp changes by >= 1°C, disconnect status flips, or color state changes
-  if (abs(currentTemp - lastDrawnTemp) < 1.0 && isDisconnected == lastDisconnected && barColor == lastDrawnColor) {
+  static WarmupState lastDrawnState = STATE_UNKNOWN;
+
+  // Redraw only when temp changes by >= 1°C or when state flips
+  if (abs(currentTemp - lastDrawnTemp) < 1.0 && currentState == lastDrawnState) {
     return;
   }
   lastDrawnTemp = currentTemp;
-  lastDisconnected = isDisconnected;
-  lastDrawnColor = barColor;
+  lastDrawnState = currentState;
 
-  // Clear only the text area above the bar
-  tft.fillRect(WARMUP_BOX_X, WARMUP_BOX_Y, WARMUP_BOX_W, 28, ST77XX_BLACK);
+  // Fully clear the entire text area from the top of the box down to the progress bar
+  tft.fillRect(WARMUP_BOX_X, WARMUP_BOX_Y, WARMUP_BOX_W, WARMUP_BAR_Y - WARMUP_BOX_Y, ST77XX_BLACK);
 
   // Draw Status Label centered
   tft.setFont(&DS_Digital_Bold10pt7b);
@@ -68,7 +118,9 @@ inline void drawOilWarmupBar(float currentTemp, bool isDisconnected) {
   int16_t x1, y1;
   uint16_t w, h;
   tft.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
-  tft.setCursor(WARMUP_BOX_X + (WARMUP_BOX_W - w) / 2, WARMUP_BOX_Y + 20);
+  int textX = WARMUP_BOX_X + (WARMUP_BOX_W - w) / 2 - x1;
+  int textY = WARMUP_BOX_Y + 20;
+  tft.setCursor(textX, textY);
   tft.print(label);
 
   // Draw Bar Outline
