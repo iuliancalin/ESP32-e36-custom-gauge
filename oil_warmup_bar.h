@@ -4,13 +4,6 @@
 #include <Arduino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
-#include "custom_fonts/Eurostile_Bold10pt7b.h"
-#include "custom_fonts/DIN_1451_Bold10pt7b.h"
-
-// --- FONT SELECTION FOR WARM-UP LABEL ---
-// Option 1 (Iconic 90s sports car cockpit): Eurostile_Bold10pt7b
-// Option 2 (OEM German industrial standard): DIN_1451_Bold10pt7b
-#define WARMUP_LABEL_FONT Eurostile_Bold10pt7b
 
 extern Adafruit_ST7789 tft;
 
@@ -20,14 +13,15 @@ const int WARMUP_BOX_Y = 105;
 const int WARMUP_BOX_W = 130;
 const int WARMUP_BOX_H = 55;
 
-const int WARMUP_BAR_X = 102; // Centered inside 130px box (10px margin)
-const int WARMUP_BAR_Y = 136;
+// Centered bold progress bar (18px tall, 110px wide, vertically centered)
 const int WARMUP_BAR_W = 110;
-const int WARMUP_BAR_H = 12;
+const int WARMUP_BAR_H = 18;
+const int WARMUP_BAR_X = WARMUP_BOX_X + (WARMUP_BOX_W - WARMUP_BAR_W) / 2; // 102
+const int WARMUP_BAR_Y = WARMUP_BOX_Y + (WARMUP_BOX_H - WARMUP_BAR_H) / 2; // 123
 
 // Temperature thresholds
 const float TEMP_COLD_MAX   = 30.0; // Below 30°C: RED (Cold)
-const float TEMP_WARM_MAX   = 60.0; // 30°C - 60°C: YELLOW (Warming up)
+const float TEMP_WARM_MAX   = 60.0; // 30°C - 60°C: YELLOW/AMBER (Warming up)
 const float TEMP_FULL_READY = 75.0; // 75°C: Progress bar reaches 100% full
 const float TEMP_OVERHEAT   = 125.0; // 125°C+: Red Overheat warning
 
@@ -42,10 +36,17 @@ enum WarmupState {
 
 inline void drawOilWarmupBar(float currentTemp, bool isDisconnected) {
   static float lastDrawnTemp = -999.0;
-  static bool lastDisconnected = false;
   static WarmupState currentState = STATE_UNKNOWN;
+  static WarmupState lastDrawnState = STATE_UNKNOWN;
+  static bool firstClearDone = false;
 
-  // Determine State with Hysteresis (prevents rapid flickering between labels at boundary temps)
+  // Clear widget area once on first run
+  if (!firstClearDone) {
+    tft.fillRect(WARMUP_BOX_X, WARMUP_BOX_Y, WARMUP_BOX_W, WARMUP_BOX_H, ST77XX_BLACK);
+    firstClearDone = true;
+  }
+
+  // Determine State with Hysteresis (prevents rapid color flickering at boundary temps)
   if (isDisconnected || currentTemp <= -900.0) {
     currentState = STATE_DISCONNECTED;
   } else {
@@ -78,35 +79,26 @@ inline void drawOilWarmupBar(float currentTemp, bool isDisconnected) {
     }
   }
 
-  // Set colors and labels based on stable state
+  // Set colors based on stable state
   uint16_t barColor;
-  const char* label;
-
   switch (currentState) {
     case STATE_COLD:
       barColor = ST77XX_RED;
-      label = "COLD";
       break;
     case STATE_WARMING:
-      barColor = 0xbd83;
-      label = "WARMING";
+      barColor = 0xbd83; // Warm amber
       break;
     case STATE_READY:
-      barColor = 0x0400;
-      label = "READY";
+      barColor = 0x0400; // OEM green
       break;
     case STATE_HOT:
-      barColor = 0x9041;
-      label = "HOT!";
+      barColor = 0x9041; // Dark red warning
       break;
     case STATE_DISCONNECTED:
     default:
       barColor = 0x4208; // Dim gray
-      label = "--";
       break;
   }
-
-  static WarmupState lastDrawnState = STATE_UNKNOWN;
 
   // Redraw only when temp changes by >= 1°C or when state flips
   if (abs(currentTemp - lastDrawnTemp) < 1.0 && currentState == lastDrawnState) {
@@ -115,24 +107,10 @@ inline void drawOilWarmupBar(float currentTemp, bool isDisconnected) {
   lastDrawnTemp = currentTemp;
   lastDrawnState = currentState;
 
-  // Fully clear the entire text area from the top of the box down to the progress bar
-  tft.fillRect(WARMUP_BOX_X, WARMUP_BOX_Y, WARMUP_BOX_W, WARMUP_BAR_Y - WARMUP_BOX_Y, ST77XX_BLACK);
+  // Draw Bar Outline with rounded corners
+  tft.drawRoundRect(WARMUP_BAR_X, WARMUP_BAR_Y, WARMUP_BAR_W, WARMUP_BAR_H, 4, barColor);
 
-  // Draw Status Label centered
-  tft.setFont(&WARMUP_LABEL_FONT);
-  tft.setTextColor(barColor);
-  int16_t x1, y1;
-  uint16_t w, h;
-  tft.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
-  int textX = WARMUP_BOX_X + (WARMUP_BOX_W - w) / 2 - x1;
-  int textY = WARMUP_BOX_Y + 20;
-  tft.setCursor(textX, textY);
-  tft.print(label);
-
-  // Draw Bar Outline
-  tft.drawRoundRect(WARMUP_BAR_X, WARMUP_BAR_Y, WARMUP_BAR_W, WARMUP_BAR_H, 3, barColor);
-
-  // Calculate Bar Fill (maps 20°C -> 85°C to 0% -> 100%)
+  // Calculate Bar Fill (maps 20°C -> 75°C to 0% -> 100%)
   int innerW = WARMUP_BAR_W - 4;
   int innerH = WARMUP_BAR_H - 4;
   int fillW = 0;
@@ -148,7 +126,7 @@ inline void drawOilWarmupBar(float currentTemp, bool isDisconnected) {
   if (fillW > 0) {
     tft.fillRect(WARMUP_BAR_X + 2, WARMUP_BAR_Y + 2, fillW, innerH, barColor);
   }
-  // Clear unfilled portion
+  // Clear unfilled portion to pure black
   if (innerW - fillW > 0) {
     tft.fillRect(WARMUP_BAR_X + 2 + fillW, WARMUP_BAR_Y + 2, innerW - fillW, innerH, ST77XX_BLACK);
   }
