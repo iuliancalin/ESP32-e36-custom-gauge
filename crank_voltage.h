@@ -18,7 +18,7 @@ extern Adafruit_ST7789 tft;
 #define CRANK_MAX_ACTIVE_MS   5000UL  // Max allowed cranking window before timeout abort
 
 // Display duration after crank ends (ms)
-#define CRANK_DISPLAY_MS       10000UL
+#define CRANK_DISPLAY_MS       5000UL
 
 // bottomMidUI geometry (matches sketch_e36_cluster.ino)
 #define CRANK_BOX_X  92
