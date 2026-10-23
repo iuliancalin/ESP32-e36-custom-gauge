@@ -55,11 +55,12 @@ inline void drawOilWarmupBar(float currentTemp, bool isDisconnected, float batte
     return; // Exit early, keeping the box black and hidden
   }
 
-  wasActive = true;
-
-  // Clear widget area once on first run when active
-  if (!firstClearDone) {
+  // Engine is running / charging
+  if (!wasActive || !firstClearDone) {
     tft.fillRect(WARMUP_BOX_X, WARMUP_BOX_Y, WARMUP_BOX_W, WARMUP_BOX_H, ST77XX_BLACK);
+    lastDrawnTemp = -999.0f;
+    lastDrawnState = STATE_UNKNOWN;
+    wasActive = true;
     firstClearDone = true;
   }
 

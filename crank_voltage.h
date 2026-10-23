@@ -13,7 +13,7 @@ extern Adafruit_ST7789 tft;
 // --- Tuning Parameters ---
 #define CRANK_DROP_TRIGGER     1.3f   // Voltage must drop instantly by this much below baseline
 #define CRANK_MAX_ENTRY_V     11.2f   // Absolute ceiling: must be below this to allow a crank trigger
-#define CRANK_EXIT_THRESHOLD   11.8f   // Voltage rises above this = engine running / crank finished
+#define CRANK_EXIT_THRESHOLD   13.0f   // Voltage rises above this = alternator active / engine running
 #define CRANK_MIN_VALID_V       6.0f   // Below this is ignition-off / 0V (ignored)
 #define CRANK_MAX_ACTIVE_MS   5000UL   // Max allowed cranking window safety timeout
 
@@ -157,4 +157,3 @@ inline void drawCrankVoltage() {
 }
 
 #endif // CRANK_VOLTAGE_H
-
