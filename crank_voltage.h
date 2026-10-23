@@ -11,9 +11,11 @@ extern const GFXfont DS_Digital_Bold12pt7b;
 extern Adafruit_ST7789 tft;
 
 // --- Thresholds ---
-#define CRANK_ENTRY_THRESHOLD  11.5f  // Voltage drop below this triggers crank detect
-#define CRANK_EXIT_THRESHOLD   12.5f  // Voltage rises above this = crank finished
-#define CRANK_PRE_VOLTAGE      12.5f  // Must be above this before a crank is valid
+#define CRANK_ENTRY_THRESHOLD   11.1f  // Voltage drop below this triggers crank detect
+#define CRANK_EXIT_THRESHOLD    12.1f  // Voltage rises above this = crank finished
+#define CRANK_PRE_VOLTAGE       11.8f  // Must be above this before a crank is valid
+#define CRANK_MIN_VALID_V        6.0f  // Below this is ignition-off / 0V, not a valid crank
+#define CRANK_MAX_ACTIVE_MS   5000UL  // Max allowed cranking window before timeout abort
 
 // Display duration after crank ends (ms)
 #define CRANK_DISPLAY_MS       10000UL
@@ -37,11 +39,12 @@ enum CrankState {
   CRANK_SHOWING    // Crank ended — displaying captured voltage for CRANK_DISPLAY_MS
 };
 
-static CrankState _crankState     = CRANK_IDLE;
-static float      _minCrankV      = 99.0f;
-static float      _preV           = 0.0f;   // Last stable voltage before crank
-static unsigned long _showStart   = 0;
-static float      _lastShownV     = -1.0f;  // Track last drawn value to avoid flicker
+static CrankState     _crankState     = CRANK_IDLE;
+static float          _minCrankV      = 99.0f;
+static float          _preV           = 0.0f;   // Last stable voltage before crank
+static unsigned long  _showStart      = 0;
+static unsigned long  _activeStart    = 0;   // Timeout tracking for cranking
+static float          _lastShownV     = -1.0f;  // Track last drawn value to avoid flicker
 
 // -------------------------------------------------------------------------
 // Call once per loop() BEFORE drawOilWarmupBar / drawCrankVoltage.
@@ -55,19 +58,30 @@ inline bool updateCrankDetection(float voltage) {
       if (voltage >= CRANK_PRE_VOLTAGE) {
         _preV = voltage;
       }
-      // Detect crank entry: was resting, now dropped hard
-      if (_preV >= CRANK_PRE_VOLTAGE && voltage < CRANK_ENTRY_THRESHOLD) {
-        _crankState  = CRANK_ACTIVE;
-        _minCrankV   = voltage;
+      // Detect crank entry: was resting, dropped hard, but NOT a total 0V drop (ignition off)
+      if (_preV >= CRANK_PRE_VOLTAGE && voltage < CRANK_ENTRY_THRESHOLD && voltage >= CRANK_MIN_VALID_V) {
+        _crankState   = CRANK_ACTIVE;
+        _minCrankV    = voltage;
+        _activeStart  = millis();
       }
       return false;
 
     case CRANK_ACTIVE:
+      // Safety abort: if voltage drops to 0 (ignition turned off) or cranking takes too long (>5s)
+      if (voltage < CRANK_MIN_VALID_V || (millis() - _activeStart > CRANK_MAX_ACTIVE_MS)) {
+        tft.fillRect(CRANK_BOX_X, CRANK_BOX_Y, CRANK_BOX_W, CRANK_BOX_H, CRANK_BG_COLOR);
+        _crankState = CRANK_IDLE;
+        _preV = voltage;
+        _minCrankV = 99.0f;
+        _lastShownV = -1.0f;
+        return false;
+      }
+
       // Record minimum voltage during cranking window
       if (voltage < _minCrankV) {
         _minCrankV = voltage;
       }
-      // Crank ends when voltage recovers (alternator/battery settles)
+      // Crank ends when voltage recovers past exit threshold
       if (voltage >= CRANK_EXIT_THRESHOLD) {
         _crankState  = CRANK_SHOWING;
         _showStart   = millis();
