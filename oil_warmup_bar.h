@@ -25,6 +25,9 @@ const float TEMP_WARM_MAX   = 60.0; // 30°C - 60°C: YELLOW/AMBER (Warming up)
 const float TEMP_FULL_READY = 75.0; // 75°C: Progress bar reaches 100% full
 const float TEMP_OVERHEAT   = 125.0; // 125°C+: Red Overheat warning
 
+// Charging threshold: alternator active voltage is typically > 13.2V
+const float CHARGING_THRESHOLD = 13.0f;
+
 enum WarmupState {
   STATE_UNKNOWN,
   STATE_COLD,
@@ -34,13 +37,27 @@ enum WarmupState {
   STATE_DISCONNECTED
 };
 
-inline void drawOilWarmupBar(float currentTemp, bool isDisconnected) {
+inline void drawOilWarmupBar(float currentTemp, bool isDisconnected, float batteryVoltage) {
   static float lastDrawnTemp = -999.0;
   static WarmupState currentState = STATE_UNKNOWN;
   static WarmupState lastDrawnState = STATE_UNKNOWN;
   static bool firstClearDone = false;
+  static bool wasActive = false;
 
-  // Clear widget area once on first run
+  // --- ENGINE NOT RUNNING / NOT CHARGING CHECK ---
+  // If the engine is off (voltage resting below ~13.0V), hide/clear the warmup bar box
+  if (batteryVoltage < CHARGING_THRESHOLD) {
+    if (wasActive || !firstClearDone) {
+      tft.fillRect(WARMUP_BOX_X, WARMUP_BOX_Y, WARMUP_BOX_W, WARMUP_BOX_H, ST77XX_BLACK);
+      wasActive = false;
+      firstClearDone = true;
+    }
+    return; // Exit early, keeping the box black and hidden
+  }
+
+  wasActive = true;
+
+  // Clear widget area once on first run when active
   if (!firstClearDone) {
     tft.fillRect(WARMUP_BOX_X, WARMUP_BOX_Y, WARMUP_BOX_W, WARMUP_BOX_H, ST77XX_BLACK);
     firstClearDone = true;
