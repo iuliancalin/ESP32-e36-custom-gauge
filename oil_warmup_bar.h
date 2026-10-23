@@ -100,7 +100,7 @@ inline void drawOilWarmupBar(float currentTemp, bool isDisconnected, float batte
   uint16_t barColor;
   switch (currentState) {
     case STATE_COLD:
-      barColor = ST77XX_RED;
+      barColor = 0x055a;
       break;
     case STATE_WARMING:
       barColor = 0xbd83; // Warm amber
