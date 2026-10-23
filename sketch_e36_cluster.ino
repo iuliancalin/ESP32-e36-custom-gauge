@@ -203,12 +203,12 @@ void loop() {
   bool cruiseActive = (digitalRead(CRUISE_IN_PIN) == LOW);
   drawCruiseIcon(cruiseIconX, cruiseIconY, cruiseActive);
 
-  // --- DYNAMIC OIL WARM-UP BAR / CRANK VOLTAGE UPDATE ---
+// --- DYNAMIC OIL WARM-UP BAR / CRANK VOLTAGE UPDATE ---
   bool crankActive = updateCrankDetection(voltage);
   if (crankActive) {
     drawCrankVoltage();
   } else {
-    drawOilWarmupBar(oilTemp, sensorDisconnected);
+    drawOilWarmupBar(oilTemp, sensorDisconnected, voltage);
   }
 
   delay(10);
