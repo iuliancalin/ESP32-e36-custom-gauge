@@ -20,8 +20,9 @@ const int WARMUP_BAR_X = WARMUP_BOX_X + (WARMUP_BOX_W - WARMUP_BAR_W) / 2; // 10
 const int WARMUP_BAR_Y = WARMUP_BOX_Y + (WARMUP_BOX_H - WARMUP_BAR_H) / 2; // 123
 
 // Temperature thresholds
-const float TEMP_COLD_MAX   = 30.0; // Below 30°C: RED (Cold)
-const float TEMP_WARM_MAX   = 60.0; // 30°C - 60°C: YELLOW/AMBER (Warming up)
+const float TEMP_BAR_START  = 10.0; // Starts filling at 10°C
+const float TEMP_COLD_MAX   = 40.0; // Below 40°C: Blue (Cold)
+const float TEMP_WARM_MAX   = 60.0; // 40°C - 60°C: YELLOW/AMBER (Warming up)
 const float TEMP_FULL_READY = 75.0; // 75°C: Progress bar reaches 100% full
 const float TEMP_OVERHEAT   = 125.0; // 125°C+: Red Overheat warning
 
@@ -128,13 +129,13 @@ inline void drawOilWarmupBar(float currentTemp, bool isDisconnected, float batte
   // Draw Bar Outline with rounded corners
   tft.drawRoundRect(WARMUP_BAR_X, WARMUP_BAR_Y, WARMUP_BAR_W, WARMUP_BAR_H, 4, barColor);
 
-  // Calculate Bar Fill (maps 20°C -> 75°C to 0% -> 100%)
+  // Calculate Bar Fill (maps TEMP_BAR_START -> TEMP_FULL_READY to 0% -> 100%)
   int innerW = WARMUP_BAR_W - 4;
   int innerH = WARMUP_BAR_H - 4;
   int fillW = 0;
 
   if (!isDisconnected && currentTemp > -900.0) {
-    float progress = (currentTemp - 20.0) / (TEMP_FULL_READY - 20.0);
+    float progress = (currentTemp - TEMP_BAR_START) / (TEMP_FULL_READY - TEMP_BAR_START);
     if (progress < 0.0) progress = 0.0;
     if (progress > 1.0) progress = 1.0;
     fillW = (int)(progress * innerW);

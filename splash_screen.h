@@ -16,7 +16,7 @@ inline void renderSplashScreen() {
   tft.setCursor(60, 115);
   tft.print("Reading sensors");
 
-  for (int i = 0; i < 12; i++) {
+  for (int i = 0; i < 8; i++) {
     tft.fillRect(248, 115, 45, 20, ST77XX_BLACK);
     tft.setCursor(248, 115);
     
@@ -25,7 +25,7 @@ inline void renderSplashScreen() {
       case 2: tft.print("..");  break;
       case 3: tft.print("..."); break;
     }
-    delay(150);
+    delay(125);
   }
   tft.fillScreen(ST77XX_BLACK);
 }
